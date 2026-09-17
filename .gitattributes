@@ -1,0 +1,17 @@
+# 强制行尾符，避免 Windows 用户 clone 后 shell 脚本无法执行
+# （这是真实会发生的坑：CRLF 的 run.sh 会让 bash 报 "bad interpreter"）
+
+* text=auto eol=lf
+
+# POSIX shell 必须是 LF
+*.sh text eol=lf
+
+# PowerShell 用 CRLF 更稳妥
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# 二进制（不要做行尾转换）
+*.png binary
+*.jpg binary
+*.pdf binary
