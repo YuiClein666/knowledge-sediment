@@ -195,3 +195,15 @@ knowledge-sediment/
 
 _由 [INIT.md](./INIT.md) 引导生成的知识库不含任何预置内容——
 你拿到的是空骨架，它会长成什么样取决于你往里放什么。_
+## 命令行入口（kb.py）
+
+安装/初始化/更新/体检都是一条命令：
+
+```bash
+python scripts/kb.py init                      # 在当前工作区开启沉淀（创建 .knowledge/）
+python scripts/kb.py install --target codex    # 装进 agent：workbuddy / codebuddy / claude / codex / cursor
+python scripts/kb.py update                    # 自更新（git pull；hooks 变更会提示重启）
+python scripts/kb.py doctor                    # 体检：配置 / 链接 / hook 注册
+```
+
+skill 一律以链接（junction）方式安装——更新源仓库后即时生效，无需重装。
