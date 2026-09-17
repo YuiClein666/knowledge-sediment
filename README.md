@@ -1,6 +1,8 @@
 # knowledge-sediment · 知识沉淀
 
 > **让 Agent 把你在任何工作区产生的可复用知识，自动沉淀成一座会长大的知识库。**
+
+仓库地址：https://github.com/YuiClein666/knowledge-sediment
 > 装一次，之后你在哪台机器、哪个目录干活，知识都往同一个地方汇。
 
 ---
@@ -25,7 +27,7 @@
 ### 1. 克隆
 
 ```bash
-git clone https://github.com/<你的账号>/knowledge-sediment.git
+git clone https://github.com/YuiClein666/knowledge-sediment.git
 ```
 
 ### 2. 让 Agent 初始化
