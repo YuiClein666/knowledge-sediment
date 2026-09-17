@@ -26,14 +26,14 @@ r"""knowledge-sediment · 运行时配置（共享模块）
     "version": 1,
     "categories": [
       {
-        "id": "10-ai-engineering",
-        "title": "AI 工程",
-        "keywords": ["agent", "prompt", "rag"],
+        "id": "10-frontend",
+        "title": "前端工程",
+        "keywords": ["react", "css", "性能"],
         "units": [
           {
-            "id": "11-agent-architecture",
-            "title": "Agent 架构",
-            "keywords": ["multi-agent", "工作流"],
+            "id": "11-react-patterns",
+            "title": "React 模式",
+            "keywords": ["hooks", "状态管理"],
             "summary": "一句话说明这个单元收什么"
           }
         ]

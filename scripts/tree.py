@@ -129,11 +129,11 @@ tags: [structure, index]
 
 ## 设计原则
 
-1. **位置即含义**——数字编号承担语义（`10-` AI 工程 / `20-` 后端 / `70-` 客户端 …），
+1. **位置即含义**——数字编号承担语义（`10-` 前端工程 / `20-` 后端 / `70-` 客户端 …），
    看到路径就知道知识属于哪一类，不依赖记忆。
 2. **三层检索**——`index.md`（去哪一类）→ `<分类>/_index.md`（去哪一单元）→
    `<单元>/_index.md`（读哪一篇）。每层都带 `tags` 与 `keywords`，Agent 逐层收敛、不读全库。
-3. **最小单元**——一个单元 = 一个可独立理解与复用的知识主题（如 `23-mysql`）；
+3. **最小单元**——一个单元 = 一个可独立理解与复用的知识主题（如 `11-react-patterns`）；
    单元内可继续细分，超过 12 篇会由健康度检查提示拆分。
 4. **横向关系**——单元与笔记可声明 5 类关系（`requires` / `relates_to` / `supersedes` /
    `contradicts` / `used_in`），由 `_map.md` 汇总成跨目录引用地图。
@@ -160,7 +160,7 @@ created: 2026-09-17
 last_reviewed: 2026-09-17
 relations:
   - type: relates_to
-    target: 20-backend/21-java-core
+    target: 10-frontend/11-react-patterns
 ---
 
 # MySQL

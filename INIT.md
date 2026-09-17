@@ -101,7 +101,7 @@ TOOLKIT="<本仓库的绝对路径>"     # 例如 C:/Users/you/knowledge-sedimen
 |---|---|
 | **3-6 个分类** | 少了装不下，多了找不到 |
 | **编号承担语义** | `10-` `20-` `30-`，位置本身有序、可插入新分类 |
-| **单元 = 可复用的一块知识** | 不是"一件事"。`23-mysql` 是单元，"优化过一次慢查询"不是 |
+| **单元 = 可复用的一块知识** | 不是"一件事"。`11-react-patterns` 是单元，"上周改了个组件 bug"不是 |
 | **每类 3-6 个单元** | 允许留空单元（作为"这里该放什么"的引导） |
 | **用用户的语言** | 他说"八股"就别写成"计算机基础理论" |
 
@@ -149,16 +149,16 @@ TOOLKIT="<本仓库的绝对路径>"     # 例如 C:/Users/you/knowledge-sedimen
   "version": 1,
   "categories": [
     {
-      "id": "10-ai-engineering",
-      "title": "AI 工程",
-      "keywords": ["agent", "prompt", "rag", "llm"],
-      "summary": "把大模型能力组装成可用系统的实践经验",
+      "id": "10-frontend",
+      "title": "前端工程",
+      "keywords": ["react", "css", "性能"],
+      "summary": "把界面做出来并可持续维护的实践",
       "units": [
         {
-          "id": "11-agent-architecture",
-          "title": "Agent 架构",
-          "keywords": ["multi-agent", "workflow", "state"],
-          "summary": "多智能体协作、工作流编排、状态管理"
+          "id": "11-react-patterns",
+          "title": "React 模式",
+          "keywords": ["hooks", "状态管理"],
+          "summary": "hooks 用法、状态放哪、怎么少渲染"
         }
       ]
     }
@@ -246,7 +246,7 @@ git push -u origin main
 
 1. **示范一次自动沉淀**
    挑刚才对话里一条有价值的内容（比如他讲的项目决策），说：
-   "刚才你说的『XXX』我记下来了，放在 `40-projects/41-xxx/`。
+   "刚才你说的『XXX』我记下来了，放在 `10-frontend/11-react-patterns/`。
    这就是它的工作方式——你不用管，该记的我记。"
 
 2. **教三个动作**
