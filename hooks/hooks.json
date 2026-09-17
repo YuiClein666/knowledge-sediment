@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "FinalStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CODEBUDDY_PLUGIN_ROOT}/hooks/run.sh\" --silent",
+            "timeout": 20
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CODEBUDDY_PLUGIN_ROOT}/hooks/run.sh\" --emit-json",
+            "timeout": 20
+          }
+        ]
+      }
+    ]
+  }
+}

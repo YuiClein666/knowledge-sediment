@@ -1,0 +1,17 @@
+{
+  "name": "knowledge-sediment",
+  "version": "0.1.0",
+  "description": "知识沉淀插件——在任意工作区把工作中产生的可复用知识沉淀成结构化知识库",
+  "author": {
+    "name": "knowledge-sediment contributors"
+  },
+  "keywords": [
+    "knowledge",
+    "sediment",
+    "memory",
+    "note",
+    "agent"
+  ],
+  "skills": "./skills",
+  "hooks": "./hooks/hooks.json"
+}

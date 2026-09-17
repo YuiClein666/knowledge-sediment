@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# 用户的分类方案（属于你的知识库，不属于工具）
+taxonomy.json
+config.json
+
+# 工作区沉淀目录
+.knowledge/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+desktop.ini
