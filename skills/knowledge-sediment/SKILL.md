@@ -304,6 +304,7 @@ deprecated（废弃，移入 90-archive）
 4. 按第四节格式写入
 5. 更新索引：python "<工具库>/scripts/knowledge_cli.py" index
 6. ★ 告知用户：「沉淀了什么 / 放在哪 / 置信度 / 哪部分不确定」
+7. ★ 记录事件（见下方）
 ```
 
 **第 6 步不能省。** 用户有权知道你把什么写进了他的知识库、放在了哪里——
@@ -311,6 +312,41 @@ deprecated（废弃，移入 90-archive）
 
 **第 2 步也不能省。** 跳过它就是把"半成品"当成"成品"存起来——
 这是知识库质量问题的**最大来源**，而且事后很难发现。
+
+### 记录事件（让指标有数据）
+
+沉淀 / 修改 / 检索之后**顺手记一笔**。这是唯一需要额外做的事，
+但它是所有指标的数据源——**没有它，"这套机制有没有在工作"就只能靠猜。**
+
+    # 沉淀了一条
+    python "<工具库>/scripts/knowledge_cli.py" log --type sediment --file "<相对路径>"
+
+    # 修改了已有内容（★ --reason 必填）
+    python "<工具库>/scripts/knowledge_cli.py" log --type revise --file "<路径>" --reason complete
+
+    # 检索过（命中与否都要记）
+    python "<工具库>/scripts/knowledge_cli.py" log --type retrieve --hit yes
+
+`--reason` 的六个合法值，分成性质相反的两类：
+
+| 值 | 含义 | 性质 |
+|---|---|---|
+| `correct` | 之前写错了 | **否定过去（返工）** |
+| `complete` | 之前漏了关键的 | **否定过去（返工）** |
+| `clarify` | 之前有歧义 | **否定过去（返工）** |
+| `extend` | 增加了新维度 | 知识生长 |
+| `update` | 外部事实变了 | 知识生长 |
+| `supersede` | 被更好的方案替代 | 知识生长 |
+
+**为什么 reason 必填**：它是区分"质量有问题"和"知识在演进"的唯一依据。
+漏标就算不出返工率，也就看不出入库门槛是不是太松。
+
+看指标：
+
+    python "<工具库>/scripts/knowledge_cli.py" metrics
+    # → 返工率 / 检索成功率 / 修改原因分布
+
+
 
 ---
 

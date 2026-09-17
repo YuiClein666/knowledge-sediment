@@ -8,18 +8,24 @@ knowledge_cli.py —— 个人知识库管理工具（插件核心）
     python knowledge_cli.py map       # 从 relations 生成 _map.md 引用地图
     python knowledge_cli.py health    # 生成 _health.md 结构健康度报告
     python knowledge_cli.py stats     # 打印统计概览
-    python knowledge_cli.py capture --from <文件> --tag <标签>   # 沉淀内容到 inbox
-    python knowledge_cli.py sync [--push]                        # git 同步
+    python knowledge_cli.py capture --title <标题> --content <内容>   # 沉淀到 inbox
+    python knowledge_cli.py sync [--push]                             # git 同步
+    python knowledge_cli.py log --type revise --reason complete --file x.md   # 记一条事件
+    python knowledge_cli.py metrics                                   # 从事件日志算指标
+    python knowledge_cli.py promote --workspace <工作区>               # 搬工作区草稿入库
 
 设计原则：
 - 纯标准库，无第三方依赖（可在任意环境跑）
 - 幂等：重复运行结果一致
 - 只读扫描 + 定点写入，不破坏手工内容
+- 事件日志永不阻塞主流程（记录失败只是没记上）
 """
 import argparse
 import re
+import shutil
 import subprocess
 import sys
+from collections import Counter
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -566,6 +572,203 @@ def cmd_sync(args):
         print("[5/5] 跳过 push（如需推送加 --push）")
 
 
+# ---------------- log ----------------
+
+def cmd_log(args):
+    """记录一条事件（agent 在沉淀 / 修改 / 检索之后调用）
+
+    这是"可观测指标"的数据源。没有它，晋升制只能靠主观判断、无法验证。
+    """
+    if ksconfig is None:
+        print("✗ 缺少 config.py，无法记录事件")
+        return 1
+
+    etype = args.type
+    if etype not in ksconfig.EVENT_TYPES:
+        print(f"✗ 未知事件类型：{etype}")
+        print(f"   合法值：{', '.join(ksconfig.EVENT_TYPES)}")
+        return 1
+
+    reason = (args.reason or "").strip()
+    if etype == "revise":
+        if not reason:
+            print("✗ revise 事件必须带 --reason（否则无法区分「返工」和「生长」）")
+            print(f"   返工（否定过去）：{', '.join(ksconfig.REASONS_REWORK)}")
+            print(f"   生长（正常演进）：{', '.join(ksconfig.REASONS_GROWTH)}")
+            return 1
+        if reason not in ksconfig.REASONS_ALL:
+            print(f"✗ 未知修改原因：{reason}")
+            print(f"   合法值：{', '.join(ksconfig.REASONS_ALL)}")
+            return 1
+
+    ok = ksconfig.log_event(
+        etype, kb=ROOT,
+        file=args.file, reason=reason, detail=args.detail,
+        hit=args.hit, state=args.state,
+    )
+    if not ok:
+        print("✗ 记录失败（不影响主流程）")
+        return 0
+
+    bits = [etype]
+    if args.file:
+        bits.append(f"file={args.file}")
+    if reason:
+        tag = "返工" if reason in ksconfig.REASONS_REWORK else "生长"
+        bits.append(f"reason={reason}({tag})")
+    if args.hit:
+        bits.append(f"hit={args.hit}")
+    print("✓ 已记录：" + "  ".join(bits))
+    return 0
+
+
+# ---------------- metrics ----------------
+
+def _hit_yes(e):
+    return str(e.get("hit", "")).lower() in ("yes", "y", "true", "1")
+
+
+def _hit_known(e):
+    return str(e.get("hit", "")).lower() in ("yes", "y", "true", "1",
+                                             "no", "n", "false", "0")
+
+
+def cmd_metrics(args):
+    """从事件日志算出指标（知识库的"体检报告"）"""
+    if ksconfig is None:
+        print("✗ 缺少 config.py")
+        return 1
+
+    events = ksconfig.read_events(ROOT)
+    if not events:
+        print("（还没有事件记录）")
+        print()
+        print("事件日志是可观测指标的数据源。让 agent 在动作之后调用：")
+        print('  python knowledge_cli.py log --type sediment --file "<相对路径>"')
+        print('  python knowledge_cli.py log --type revise --file "..." --reason complete')
+        print('  python knowledge_cli.py log --type retrieve --hit yes')
+        print()
+        print(f"日志会写到：{ksconfig.events_path(ROOT)}")
+        return 0
+
+    types = Counter(e.get("type", "?") for e in events)
+    tss = sorted(e.get("ts", "") for e in events if e.get("ts"))
+
+    print("事件日志指标")
+    print("=" * 52)
+    print(f"事件总数：{len(events)}")
+    if tss:
+        print(f"时间范围：{tss[0][:10]} ~ {tss[-1][:10]}")
+    print()
+    print("按类型：")
+    for t in ksconfig.EVENT_TYPES:
+        if types.get(t):
+            print(f"  {t:10s} {types[t]}")
+    for k, v in types.items():
+        if k not in ksconfig.EVENT_TYPES:
+            print(f"  {k:10s} {v}  (未知类型)")
+
+    revises = [e for e in events if e.get("type") == "revise"]
+    if revises:
+        reasons = Counter(e.get("reason", "(未标)") for e in revises)
+        print()
+        print("修改原因分布：")
+        rework = 0
+        for r in list(ksconfig.REASONS_REWORK) + list(ksconfig.REASONS_GROWTH) + ["(未标)"]:
+            if not reasons.get(r):
+                continue
+            if r in ksconfig.REASONS_REWORK:
+                mark, rework = "  ← 返工", rework + reasons[r]
+            elif r in ksconfig.REASONS_GROWTH:
+                mark = "  ← 生长"
+            else:
+                mark = ""
+            print(f"  {r:12s} {reasons[r]}{mark}")
+        total_r = sum(reasons.values())
+        rate = rework / total_r * 100 if total_r else 0
+        print()
+        print(f"★ 返工率：{rework}/{total_r} = {rate:.0f}%")
+        print("   （否定性修改 ÷ 总修改。越高说明当初的入库门槛越松）")
+        if rate >= 50 and total_r >= 4:
+            print("   ⚠ 偏高 → 回头检查入库前功课，尤其第③步「找缺口」有没有做")
+
+    rets = [e for e in events if e.get("type") == "retrieve"]
+    if rets:
+        known = [e for e in rets if _hit_known(e)]
+        print()
+        if known:
+            yes = sum(1 for e in known if _hit_yes(e))
+            print(f"检索成功率：{yes}/{len(known)} = {yes / len(known) * 100:.0f}%")
+            print("   （你问的问题里，库里有答案的比例 —— 它存在的唯一理由）")
+        else:
+            print(f"检索次数：{len(rets)}（没标 --hit，算不出成功率）")
+
+    print()
+    print(f"日志文件：{ksconfig.events_path(ROOT)}")
+    return 0
+
+
+# ---------------- promote ----------------
+
+def cmd_promote(args):
+    """把工作区 .knowledge/inbox/ 的草稿搬进知识库 00-inbox/（只搬不判）
+
+    刻意**不判断归属**：脚本判错会直接污染知识库，而且很难发现
+    （内容在不该在的地方，检索命中率变低，但没人知道为什么）。
+    归属判断交给 agent —— 它在知识库上下文里能看到相邻的所有内容。
+    """
+    ws = Path(args.workspace).expanduser().resolve()
+    kdir = ws / ".knowledge"
+    inbox = kdir / "inbox"
+    if not inbox.is_dir():
+        print(f"✗ 工作区没有沉淀目录：{inbox}")
+        print("  （先用 init_workspace.py 初始化）")
+        return 1
+
+    drafts = sorted(p for p in inbox.glob("*.md") if not p.name.startswith("_"))
+    if not drafts:
+        print("✓ inbox 是空的，没有要搬的草稿")
+        return 0
+
+    target = ROOT / "00-inbox"
+    print(f"工作区：{ws}")
+    print(f"知识库：{ROOT}")
+    print(f"待搬　：{len(drafts)} 条")
+    print()
+
+    moved, renamed = [], []
+    for src in drafts:
+        dst = target / src.name
+        if dst.exists():
+            stamp = datetime.now().strftime("%H%M%S")
+            dst = target / f"{src.stem}-{stamp}{src.suffix}"
+            renamed.append((src.name, dst.name))
+        if args.dry_run:
+            print(f"  [预览] {src.name} → 00-inbox/{dst.name}")
+            continue
+        target.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(src), str(dst))
+        moved.append(dst.name)
+
+    if args.dry_run:
+        print()
+        print("（预览模式，未真正搬运。去掉 --dry-run 执行）")
+        return 0
+
+    ksconfig.log_event("promote", kb=ROOT, n=len(moved), from_ws=str(ws))
+    print()
+    print(f"✓ 已搬 {len(moved)} 条到 00-inbox/")
+    if renamed:
+        print("  （同名已重命名，未覆盖）")
+        for a, b in renamed:
+            print(f"     {a}  →  {b}")
+    print()
+    print("下一步不能省：")
+    print("  agent 需在知识库上下文里判断归属，把 00-inbox 的内容整理进对应单元，")
+    print("  再运行 index 重建索引（然后 log --type sediment 记一笔）。")
+    return 0
+
+
 # ---------------- main ----------------
 
 def main():
@@ -593,6 +796,28 @@ def main():
     ps = sub.add_parser("sync", parents=[common], help="git 同步")
     ps.add_argument("--push", action="store_true", help="同步后推送远端")
     ps.set_defaults(func=cmd_sync)
+
+    event_types = (" | ".join(ksconfig.EVENT_TYPES) if ksconfig
+                   else "sediment | revise | retrieve | promote | demote | note")
+    pl = sub.add_parser("log", parents=[common], help="记录一条事件（可观测指标的数据源）")
+    pl.add_argument("--type", required=True, help="事件类型：" + event_types)
+    pl.add_argument("--file", default="", help="相关文件（相对知识库的路径）")
+    pl.add_argument("--reason", default="",
+                    help="修改原因（revise 必填）：correct/complete/clarify=返工；extend/update/supersede=生长")
+    pl.add_argument("--detail", default="", help="一句话说明")
+    pl.add_argument("--hit", default="", help="检索是否命中：yes | no（retrieve 用）")
+    pl.add_argument("--state", default="", help="状态变化：draft | promoted | deprecated")
+    pl.set_defaults(func=cmd_log)
+
+    sub.add_parser("metrics", parents=[common],
+                   help="从事件日志算指标（返工率 / 检索成功率）").set_defaults(func=cmd_metrics)
+
+    pp = sub.add_parser("promote", parents=[common],
+                        help="把工作区 .knowledge/inbox/ 搬进知识库 00-inbox/（只搬不判）")
+    pp.add_argument("--workspace", "--from", dest="workspace", required=True,
+                    help="工作区路径（含 .knowledge/ 的那个目录）")
+    pp.add_argument("--dry-run", action="store_true", help="只预览，不搬运")
+    pp.set_defaults(func=cmd_promote)
 
     args = ap.parse_args()
     if not args.cmd:

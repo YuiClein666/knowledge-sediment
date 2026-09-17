@@ -49,6 +49,7 @@ r"""knowledge-sediment · 运行时配置（共享模块）
 import json
 import os
 import re
+from datetime import datetime
 from pathlib import Path
 
 HOME = Path(os.path.expanduser("~"))
@@ -224,6 +225,67 @@ def all_units(cfg=None):
 
 def has_taxonomy(cfg=None):
     return bool(categories(cfg))
+
+
+# ---------------- 事件日志（append-only）----------------
+#
+# 为什么需要它：知识库的"好坏"没法靠主观打分判断，只能靠**可观测的动作数据**。
+# 每个动作都是一次判断，记录它就能度量系统的判断力。
+#
+# 记什么：沉淀 / 修改 / 检索 / 晋升 / 降级 —— 一行一条 JSON，只追加不改。
+# 放哪：知识库根目录的 `_events.jsonl`（跟内容一起版本化，可跨设备）。
+
+EVENTS_FILE = "_events.jsonl"
+
+EVENT_TYPES = ("sediment", "revise", "retrieve", "promote", "demote", "note")
+
+# 修改原因分类（关键：把"返工"和"长大"分开）
+REASONS_REWORK = ("correct", "complete", "clarify")      # 否定过去 = 返工
+REASONS_GROWTH = ("extend", "update", "supersede")       # 知识生长 = 正常演进
+REASONS_ALL = REASONS_REWORK + REASONS_GROWTH
+
+
+def events_path(kb=None):
+    """事件日志路径（在知识库根目录）"""
+    return Path(kb if kb else resolve_kb()) / EVENTS_FILE
+
+
+def log_event(event_type, kb=None, **fields):
+    """追加一条事件。**永不抛异常**——记录失败不该阻塞主流程。"""
+    try:
+        rec = {"ts": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "type": event_type}
+        for k, v in fields.items():
+            if v not in (None, "", []):
+                rec[k] = v
+        p = events_path(kb)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with p.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+        return True
+    except Exception:
+        return False
+
+
+def read_events(kb=None):
+    """读取全部事件（跳过坏行），返回 list[dict]"""
+    out = []
+    p = events_path(kb)
+    if not p.is_file():
+        return out
+    try:
+        for line in p.read_text(encoding="utf-8", errors="replace").split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                d = json.loads(line)
+                if isinstance(d, dict):
+                    out.append(d)
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return out
 
 
 if __name__ == "__main__":
