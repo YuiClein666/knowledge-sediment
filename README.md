@@ -195,15 +195,36 @@ knowledge-sediment/
 
 _由 [INIT.md](./INIT.md) 引导生成的知识库不含任何预置内容——
 你拿到的是空骨架，它会长成什么样取决于你往里放什么。_
-## 命令行入口（kb.py）
+## 命令行入口（kb）
+
+**一键安装（Windows PowerShell，自动克隆 + 检测本机 agent + 全部装上）：**
+
+```powershell
+irm https://raw.githubusercontent.com/YuiClein666/knowledge-sediment/main/bootstrap.ps1 | iex
+```
+
+macOS / Linux：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/YuiClein666/knowledge-sediment/main/bootstrap.sh | bash
+```
+
+**或手动两步**（克隆后用启动器，`install` 不带参数会自动检测本机 agent 并全部安装）：
+
+```bash
+git clone https://github.com/YuiClein666/knowledge-sediment.git
+cd knowledge-sediment
+kb install          # Windows: kb.cmd install（mac/linux: bash kb.sh install）
+```
 
 安装/初始化/更新/体检都是一条命令：
 
 ```bash
-python scripts/kb.py init                      # 在当前工作区开启沉淀（创建 .knowledge/）
-python scripts/kb.py install --target codex    # 装进 agent：workbuddy / codebuddy / claude / codex / cursor
-python scripts/kb.py update                    # 自更新（git pull；hooks 变更会提示重启）
-python scripts/kb.py doctor                    # 体检：配置 / 链接 / hook 注册
+kb init                      # 在当前工作区开启沉淀（创建 .knowledge/）
+kb install                   # 装进本机检测到的所有 agent（或 --target 指定单个）
+kb update                    # 自更新（git pull；hooks 变更会提示重启）
+kb doctor                    # 体检：配置 / 链接 / hook 注册
 ```
 
-skill 一律以链接（junction）方式安装——更新源仓库后即时生效，无需重装。
+> Windows 下 `kb` 即 `kb.cmd`，mac/linux 下即 `kb.sh`（也可直接 `python scripts/kb.py`）。
+> skill 一律以链接（junction）方式安装——更新源仓库后即时生效，无需重装。

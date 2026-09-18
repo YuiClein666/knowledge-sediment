@@ -3,10 +3,9 @@
 """
 kb.py — knowledge-sediment 统一命令入口
 
-一条命令完成安装 / 初始化 / 更新 / 体检，不依赖任何特定 Agent 的交互约定：
-
     python kb.py init                     在当前目录（或 --workdir）开启知识沉淀（创建 .knowledge/）
-    python kb.py install --target X       把插件装进某个 agent
+    python kb.py install                  自动检测本机已安装的 agent 并装到所有检测到的
+    python kb.py install --target codex   只装进指定 agent
                                           （workbuddy / codebuddy / claude / codex / cursor）
     python kb.py update [--dry-run]       自更新：git pull 本工具仓库；hooks 变更时提示重启
     python kb.py doctor                   体检：配置 / 知识库 / 链接 / hook 注册是否健康
@@ -15,10 +14,12 @@ kb.py — knowledge-sediment 统一命令入口
 - 纯标准库，零第三方依赖
 - skill 一律链接（junction），不复制——更新源仓库即全端生效
 - 装不了的（agent 未安装 / 无 hook 能力）明确告知并降级，绝不静默失败
+- 不带 --target 时自动检测本机 agent，能装几个装几个
 """
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -28,7 +29,10 @@ TOOL_ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-import config as cfg  # noqa: E402
+try:
+    import config as cfg  # noqa: E402
+except Exception:
+    cfg = None
 
 HOME = Path.home()
 CONFIG_PATH = HOME / ".knowledge-sediment" / "config.json"
@@ -69,9 +73,8 @@ def make_junction(link: Path, target: Path) -> str:
 def backup(p: Path):
     if p.exists():
         bak = p.with_name(p.name + ".bak-" + time.strftime("%Y%m%d%H%M%S"))
-        shutil_copy2 = __import__("shutil").copy2
         bak.parent.mkdir(parents=True, exist_ok=True)
-        shutil_copy2(p, bak)
+        shutil.copy2(p, bak)
         print(f"    · 已备份原文件为 {bak.name}")
 
 
@@ -89,47 +92,60 @@ def rules_block(skill_md: Path) -> str:
 
 # ---------------------------------------------------------------- targets
 
-# 每个 agent 一份声明：skill 链接位置 + hook/规则能力。
-# hook 能力为 None 时诚实降级为"规则层 + 手动触发"。
+# 每个 agent 一份声明：home 用于自动检测，skill_link 是 skill 链接位置，
+# hook/rules 描述该 agent 的触发能力。hook 能力为空时诚实降级为手动触发。
 TARGETS = {
-    "workbuddy": {"family": "codebuddy"},
-    "codebuddy": {"family": "codebuddy"},
+    "workbuddy": {
+        "home": ".workbuddy", "family": "codebuddy",
+        "trigger": "hook 自动（FinalStop / UserPromptSubmit）",
+    },
+    "codebuddy": {
+        "home": ".codebuddy", "family": "codebuddy",
+        "trigger": "hook 自动（FinalStop / UserPromptSubmit）",
+    },
     "claude": {
         "home": ".claude",
         "skill_link": ".claude/skills/knowledge-sediment",
         "hooks_file": ".claude/settings.json",
         "hook_events": ["SessionStart", "Stop"],
+        "trigger": "hook 自动（实验性）",
         "note": "hook 写入为实验性（Claude Code 配置格式可能随版本变化）；装完请说一句「沉淀一下」验证",
     },
     "codex": {
         "home": ".codex",
         "skill_link": ".agents/skills/knowledge-sediment",
         "rules_append": ".codex/AGENTS.md",
-        "note": "Codex 的 hooks 需 feature flag，本次只装规则层；触发靠说「沉淀一下」",
+        "trigger": "手动触发（说「沉淀一下」）；hook 需 feature flag，暂未启用",
     },
     "cursor": {
         "home": ".cursor",
         "rules_file": ".cursor/rules/knowledge-sediment.mdc",
-        "note": "Cursor 无 hooks，只能规则层 + 手动触发",
+        "trigger": "手动触发（说「沉淀一下」）；Cursor 无 hook 能力",
     },
 }
 
 
-def install_codebuddy_family(target: str, archive_root: str) -> int:
-    """workbuddy / codebuddy 走既有安装器（市场注册 + 双 hook）。"""
-    cmd = [sys.executable, str(SCRIPTS / "install_plugin.py"), "--target", target]
-    if archive_root:
-        cmd += ["--archive-root", archive_root]
-    r = subprocess.run(cmd)
-    return r.returncode
+def detect_agents() -> list:
+    """检测本机已安装的 agent（按用户目录存在性）。"""
+    found = []
+    for name, spec in TARGETS.items():
+        if (HOME / spec["home"]).is_dir():
+            found.append(name)
+    return found
 
 
-def install_generic(target: str) -> int:
-    """claude / codex / cursor：junction skill + 写规则/hook，装不了就明说。"""
+def install_one(target: str, conf: dict) -> int:
     spec = TARGETS[target]
+
+    if spec.get("family") == "codebuddy":
+        cmd = [sys.executable, str(SCRIPTS / "install_plugin.py"), "--target", target]
+        if conf.get("archive_root"):
+            cmd += ["--archive-root", conf["archive_root"]]
+        return subprocess.run(cmd).returncode
+
     home = HOME / spec["home"]
     if not home.is_dir():
-        print(f"  ✗ 未检测到 {target} 的安装目录（{home}），跳过——装好 {target} 后再运行本命令")
+        print(f"  ✗ 未检测到 {target} 的安装目录（{home}），跳过")
         return 1
 
     skill_md_src = TOOL_ROOT / "skills" / "knowledge-sediment" / "SKILL.md"
@@ -186,7 +202,9 @@ def install_generic(target: str) -> int:
     if not automatic:
         print(f"    – 该 agent 无 hook 能力：自动提醒不可用，触发靠说「沉淀一下」")
 
-    print(f"\n  说明：{spec['note']}")
+    print(f"  触发方式：{spec['trigger']}")
+    if spec.get("note"):
+        print(f"  说明：{spec['note']}")
     return 0
 
 
@@ -194,7 +212,7 @@ def install_generic(target: str) -> int:
 
 def cmd_init(args):
     workdir = Path(args.workdir).resolve() if args.workdir else Path.cwd()
-    conf = cfg.load_config()
+    conf = cfg.load_config() if cfg else {}
     kb = conf.get("kb") or (args.kb if args.kb else "")
     if not kb:
         print("✗ 未配置知识库路径（~/.knowledge-sediment/config.json 的 kb 字段），"
@@ -208,15 +226,35 @@ def cmd_init(args):
 
 
 def cmd_install(args):
-    target = args.target
-    if target not in TARGETS:
-        print(f"✗ 未知 target：{target}（可选：{', '.join(TARGETS)}）")
+    conf = cfg.load_config() if cfg else {}
+
+    if args.target:
+        if args.target not in TARGETS:
+            print(f"✗ 未知 target：{args.target}（可选：{', '.join(TARGETS)}）")
+            return 1
+        targets = [args.target]
+    else:
+        targets = detect_agents()
+        if not targets:
+            print("✗ 未检测到任何已安装的 agent。")
+            print(f"  支持自动检测：{', '.join(TARGETS)}")
+            print("  装好任意一个 agent 后重新运行本命令，或用 --target 指定。")
+            return 1
+        print(f"检测到本机已安装的 agent：{', '.join(targets)}")
+        print(f"将逐一安装（已装过的会幂等跳过）\n")
+
+    failed = []
+    for t in targets:
+        print(f"=== 安装到 {t} ===")
+        if install_one(t, conf) != 0:
+            failed.append(t)
+        print()
+
+    if failed:
+        print(f"✗ 以下 agent 安装失败：{', '.join(failed)}")
         return 1
-    print(f"=== 安装到 {target} ===")
-    if TARGETS[target].get("family") == "codebuddy":
-        conf = cfg.load_config()
-        return install_codebuddy_family(target, conf.get("archive_root", ""))
-    return install_generic(target)
+    print(f"✓ 完成（{len(targets)} 个 agent）。重启对应 agent 后 hook 生效；skill 即时生效。")
+    return 0
 
 
 def cmd_update(args):
@@ -246,7 +284,7 @@ def cmd_update(args):
 def cmd_doctor(args):
     print("=== kb doctor ===")
     ok = True
-    conf = cfg.load_config()
+    conf = cfg.load_config() if cfg else {}
     kb = conf.get("kb", "")
     checks = [
         ("运行时配置", CONFIG_PATH.exists() or bool(conf)),
@@ -279,7 +317,10 @@ def cmd_doctor(args):
 
 
 def main():
-    ap = argparse.ArgumentParser(prog="kb", description="knowledge-sediment 统一命令入口")
+    ap = argparse.ArgumentParser(
+        prog="kb",
+        description="knowledge-sediment 统一命令入口：init 开启工作区沉淀 / install 装插件 / update 自更新 / doctor 体检",
+    )
     sub = ap.add_subparsers(dest="cmd")
 
     pi = sub.add_parser("init", help="在当前工作区开启知识沉淀（创建 .knowledge/）")
@@ -287,8 +328,9 @@ def main():
     pi.add_argument("--kb", default="", help="知识库路径（默认读配置）")
     pi.set_defaults(func=cmd_init)
 
-    pn = sub.add_parser("install", help="把插件装进某个 agent")
-    pn.add_argument("--target", required=True, choices=sorted(TARGETS))
+    pn = sub.add_parser("install", help="安装插件（不带 --target 时自动检测本机 agent）")
+    pn.add_argument("--target", default="", choices=[""] + sorted(TARGETS),
+                    help="目标 agent（省略则自动检测全部已安装的）")
     pn.set_defaults(func=cmd_install)
 
     pu = sub.add_parser("update", help="自更新工具仓库")
